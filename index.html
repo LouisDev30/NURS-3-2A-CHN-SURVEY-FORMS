@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EAC CHN2-RLE Community Health Survey Tally Sheet</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel JS -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Custom styling for Google Sheets feel -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap');
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .mono {
+            font-family: 'Roboto Mono', monospace;
+        }
+        .sheet-grid th {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            padding: 6px 10px;
+            white-space: nowrap;
+        }
+        .sheet-grid td {
+            border: 1px solid #e2e8f0;
+            padding: 6px 10px;
+            font-size: 0.8125rem;
+            white-space: nowrap;
+        }
+        .sheet-grid tr:hover td {
+            background-color: #f0f9ff;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            body {
+                background: white;
+                color: black;
+            }
+        }
+    </style>
+</head>
+<body class="h-screen overflow-hidden flex flex-col">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // Default Empty Household Survey Schema following the EAC CHN Assessment Guide verbatim
+        const createEmptySurvey = (id = Date.now()) => ({
+            id: id,
+            meta: {
+                informantInitials: '',
+                contactNumber: '',
+                address: '',
+                dateOfAssessment: new Date().toISOString().split('T')[0],
+                studentNurse: ''
+            },
+            sectionI: {
+                householdMembers: [
+                    { rank: 1, initials: '', sex: 'M', birthMonth: '', birthYear: '', maritalStatus: 'Single', weightNotes: '' }
+                ],
+                homeEnvironment: {
+                    ownership: '', // Owned, Rented, Rent-free
+                    constructionMaterials: '', // Light, Concrete, Mixed, makeshift, others
+                    constructionMaterialsOther: '',
+                    sleepingRooms: '', // own rooms, others
+                    sleepingRoomsSpecify: '',
+                    lightingFacilities: '', // electricity, kerosene, candle
+                    livingSpaceAdequacy: '', // small, enough, spacious
+                    sleepingArrangement: '', // in one room, in different rooms
+                    sanitaryCondition: '' // dirty, clean, dusty, dirty & polluted
+                },
+                drinkingWater: {
+                    source: '', // private, public
+                    distanceMeters: '',
+                    storage: '', // none, direct from faucet or pipe, large covered container with faucet, large uncovered container without faucet, others
+                    storageOther: ''
+                },
+                kitchen: {
+                    cookingFacility: '', // Electric stove, Gas stove, Wood/charcoal
+                    sanitaryConditions: '' // Clean, Dusty, Dirty, Dirty & polluted
+                },
+                drainageFacility: {
+                    type: '', // Open drainage, blind drainage, none
+                    distanceMeters: ''
+                },
+                toiletType: {
+                    type: '', // pail system, Fixed flush type, others
+                    otherSpecify: ''
+                },
+                garbageDisposal: {
+                    method: '', // open burning, open dumping, burried in pit, composting, garbage collection, others
+                    otherSpecify: ''
+                },
+                householdHazards: '',
+                communityHazards: '',
+                domesticAnimals: [
+                    { kind: '', number: '', areaKept: '' }
+                ]
+            },
+            sectionII: {
+                educationalLevel: {
+                    father: { education: '', occupation: '' },
+                    mother: { education: '', occupation: '' }
+                },
+                familyMonthlyIncome: '',
+                expenses: {
+                    water: '',
+                    electricity: '',
+                    foodGrocery: '',
+                    rentals: '',
+                    school: '',
+                    clothing: '',
+                    leisure: '',
+                    others: ''
+                },
+                moneyDecisionMaker: '',
+                communicationFacilities: [], // cellular phone, letters, e-mail, others
+                communicationFacilitiesOther: '',
+                transportationAvailable: [], // Tricycle, Jeepney, personal vehicle, personal motorbike, pedicab, bicycle, walking distance
+                typesOfIndustry: [], // School, Hospital, Market and or supermarket, Maternity clinic/ Lying-in clinic, Shopping mall, Private specialty Clinic, Water refilling station, Employment Industries (products, technology, tourism, farming), Gasoline station, Private / Government business centers (bank, law offices, lending centers,remittances, etc.)
+                communicationNetwork: [], // Barangay health center personnel (Nurse, Midwife, BHW), Barangay hall personnel, Neighbor, Private Clinic (Physician, Dentist, Midwife), Family/ Friends, Social media, others
+                culturalFactors: {
+                    ethnicity: '',
+                    religion: '',
+                    languageSpoken: '',
+                    politicalOrientation: '' // Totalitarianism, Constitutionalism, Democracy, Autocracy
+                },
+                healthBeliefs: {
+                    causesOfIllness: '', // Natural causes, Personal causes, Mystical causes
+                    influences: '' // Personal Promotive & Preventive practices, Family Influences, Cultural influences
+                }
+            },
+            sectionIII: {
+                leadingMortality: '',
+                leadingMorbidity: '',
+                leadingInfantChildMortality: '',
+                leadingMaternalMortality: '',
+                leadingHospitalAdmission: '',
+                leadingClinicConsultation: ''
+            },
+            sectionIV: {
+                manpowerPopulationRatio: '',
+                qualityHealthManpower: '', // adequate or not
+                healthBudget: '', // yes or no
+                sourcesHealthFunding: '', // if yes, is it enough, or satisfying
+                availHealthServices: '', // yes, no
+                availFrequency: '',
+                availReasons: [], // illness, prenatal, family planning, postnatal, dental, nutrition
+                firstPersonConsulted: '' // Doctor, Nurse, Midwife, BHW, "hilot", "herbularyo"
+            },
+            sectionV: {
+                powerStructure: '', // formal, informal, both
+                attitudesTowardAuthority: '',
+                conflictOrBondingConditions: '',
+                effectivePracticesSettlingIssues: ''
+            }
+        });
+
+        // Sample initial datasets for nursing group
+        const initialMockSurveys = [
+            {
+                ...createEmptySurvey(101),
+                meta: { informantInitials: 'M.A.R.', contactNumber: '09171234567', address: 'Blk 12 Lot 4, Brgy. Burol Main, Dasmariñas, Cavite', dateOfAssessment: '2026-09-28', studentNurse: 'Juan Dela Cruz, SN' },
+                sectionI: {
+                    ...createEmptySurvey().sectionI,
+                    householdMembers: [
+                        { rank: 1, initials: 'J.R.', sex: 'M', birthMonth: '05', birthYear: '1978', maritalStatus: 'Married', weightNotes: '' },
+                        { rank: 2, initials: 'M.R.', sex: 'F', birthMonth: '08', birthYear: '1982', maritalStatus: 'Married', weightNotes: '62 kg' },
+                        { rank: 3, initials: 'K.R.', sex: 'F', birthMonth: '11', birthYear: '2019', maritalStatus: 'Single', weightNotes: '14 kg (Child 0-5 yrs)' }
+                    ],
+                    homeEnvironment: { ownership: 'Owned', constructionMaterials: 'Concrete', constructionMaterialsOther: '', sleepingRooms: 'own rooms', sleepingRoomsSpecify: '2 rooms', lightingFacilities: 'electricity', livingSpaceAdequacy: 'enough', sleepingArrangement: 'in different rooms', sanitaryCondition: 'clean' },
+                    drinkingWater: { source: 'private', distanceMeters: '0', storage: 'direct from faucet or pipe', storageOther: '' },
+                    kitchen: { cookingFacility: 'Gas stove', sanitaryConditions: 'Clean' },
+                    drainageFacility: { type: 'blind drainage', distanceMeters: '3' },
+                    toiletType: { type: 'Fixed flush type', otherSpecify: '' },
+                    garbageDisposal: { method: 'garbage collection', otherSpecify: '' },
+                    householdHazards: 'Slippery stairs, exposed wiring near garden',
+                    communityHazards: 'Open drainage ditch near street corner',
+                    domesticAnimals: [{ kind: 'Dog', number: '2', areaKept: 'Backyard caged' }]
+                },
+                sectionII: {
+                    ...createEmptySurvey().sectionII,
+                    educationalLevel: { father: { education: 'College Graduate', occupation: 'Civil Engineer' }, mother: { education: 'College Graduate', occupation: 'High School Teacher' } },
+                    familyMonthlyIncome: '35000',
+                    expenses: { water: '800', electricity: '3200', foodGrocery: '12000', rentals: '0', school: '4000', clothing: '1500', leisure: '2000', others: '1000' },
+                    moneyDecisionMaker: 'Both Father & Mother',
+                    communicationFacilities: ['cellular phone', 'e-mail'],
+                    transportationAvailable: ['Tricycle', 'Jeepney', 'personal motorbike'],
+                    typesOfIndustry: ['School', 'Market and or supermarket', 'Water refilling station', 'Gasoline station'],
+                    communicationNetwork: ['Barangay health center personnel (Nurse, Midwife, BHW)', 'Social media', 'Family/ Friends'],
+                    culturalFactors: { ethnicity: 'Tagalog', religion: 'Roman Catholic', languageSpoken: 'Filipino / English', politicalOrientation: 'Democracy' },
+                    healthBeliefs: { causesOfIllness: 'Natural causes', influences: 'Personal Promotive & Preventive practices' }
+                },
+                sectionIII: { leadingMortality: 'Hypertension, Heart Diseases', leadingMorbidity: 'URTI, Dengue, Diarrhea', leadingInfantChildMortality: 'Pneumonia', leadingMaternalMortality: 'Postpartum Hemorrhage', leadingHospitalAdmission: 'Dengue Fever', leadingClinicConsultation: 'Acute Upper Respiratory Tract Infection' },
+                sectionIV: { manpowerPopulationRatio: '1 BHW : 200 Households', qualityHealthManpower: 'adequate', healthBudget: 'yes', sourcesHealthFunding: 'LGU Municipal Fund', availHealthServices: 'yes', availFrequency: 'Monthly', availReasons: ['prenatal', 'nutrition'], firstPersonConsulted: 'Doctor' },
+                sectionV: { powerStructure: 'formal', attitudesTowardAuthority: 'Cooperative and respectful of barangay officials', conflictOrBondingConditions: 'Clean-up drives and Fiesta celebrations foster unity', effectivePracticesSettlingIssues: 'Barangay Lupong Tagapamayapa dialogues' }
+            },
+            {
+                ...createEmptySurvey(102),
+                meta: { informantInitials: 'A.B.S.', contactNumber: '09189876543', address: 'Blk 5 Lot 10, Brgy. Burol Main, Dasmariñas, Cavite', dateOfAssessment: '2026-09-29', studentNurse: 'Maria Santos, SN' },
+                sectionI: {
+                    ...createEmptySurvey().sectionI,
+                    householdMembers: [
+                        { rank: 1, initials: 'A.S.', sex: 'M', birthMonth: '02', birthYear: '1960', maritalStatus: 'Widower', weightNotes: '58 kg (Elderly)' },
+                        { rank: 2, initials: 'L.S.', sex: 'F', birthMonth: '09', birthYear: '1990', maritalStatus: 'Single', weightNotes: 'Pregnant (24 weeks)' }
+                    ],
+                    homeEnvironment: { ownership: 'Rented', constructionMaterials: 'Mixed', constructionMaterialsOther: '', sleepingRooms: 'others', sleepingRoomsSpecify: 'Shared 1 room', lightingFacilities: 'electricity', livingSpaceAdequacy: 'small', sleepingArrangement: 'in one room', sanitaryCondition: 'dusty' },
+                    drinkingWater: { source: 'public', distanceMeters: '15', storage: 'large covered container with faucet', storageOther: '' },
+                    kitchen: { cookingFacility: 'Gas stove', sanitaryConditions: 'Dusty' },
+                    drainageFacility: { type: 'Open drainage', distanceMeters: '1' },
+                    toiletType: { type: 'pail system', otherSpecify: '' },
+                    garbageDisposal: { method: 'garbage collection', otherSpecify: '' },
+                    householdHazards: 'Poor ventilation, dim lighting',
+                    communityHazards: 'Narrow pathways, uncollected trash nearby',
+                    domesticAnimals: [{ kind: 'Cat', number: '1', areaKept: 'Inside home' }]
+                },
+                sectionII: {
+                    ...createEmptySurvey().sectionII,
+                    educationalLevel: { father: { education: 'High School Undergraduate', occupation: 'Retired / None' }, mother: { education: 'High School Graduate', occupation: 'Vendor' } },
+                    familyMonthlyIncome: '14000',
+                    expenses: { water: '450', electricity: '1200', foodGrocery: '6000', rentals: '3500', school: '0', clothing: '500', leisure: '0', others: '500' },
+                    moneyDecisionMaker: 'Daughter (L.S.)',
+                    communicationFacilities: ['cellular phone'],
+                    transportationAvailable: ['Tricycle', 'walking distance'],
+                    typesOfIndustry: ['Market and or supermarket', 'Water refilling station'],
+                    communicationNetwork: ['Barangay health center personnel (Nurse, Midwife, BHW)', 'Neighbor'],
+                    culturalFactors: { ethnicity: 'Bicolano', religion: 'Roman Catholic', languageSpoken: 'Filipino', politicalOrientation: 'Democracy' },
+                    healthBeliefs: { causesOfIllness: 'Personal causes', influences: 'Family Influences' }
+                },
+                sectionIII: { leadingMortality: 'Hypertension, Stroke', leadingMorbidity: 'Influenza, Hypertension', leadingInfantChildMortality: 'Diarrhea', leadingMaternalMortality: 'Eclampsia', leadingHospitalAdmission: 'Hypertensive Emergency', leadingClinicConsultation: 'Routine Prenatal & Blood Pressure Check' },
+                sectionIV: { manpowerPopulationRatio: '1 Midwife : 1500 Residents', qualityHealthManpower: 'adequate', healthBudget: 'yes', sourcesHealthFunding: 'Barangay Health Allocation', availHealthServices: 'yes', availFrequency: 'Twice a month', availReasons: ['illness', 'prenatal'], firstPersonConsulted: 'BHW' },
+                sectionV: { powerStructure: 'both', attitudesTowardAuthority: 'Generally compliant', conflictOrBondingConditions: 'Water supply shortages occasionally cause conflicts', effectivePracticesSettlingIssues: 'Purok leader intervention' }
+            }
+        ];
+
+        function HeaderBar({ activeTab, setActiveTab, surveysCount, onAddNew, onExport, onImport }) {
+            return (
+                <header className="bg-slate-900 text-white shadow-md border-b border-slate-800 no-print flex-none">
+                    {/* Top Branding Bar */}
+                    <div className="px-4 py-2.5 flex flex-wrap items-center justify-between border-b border-slate-800 gap-3">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-red-700 text-white font-bold p-2 rounded text-xs tracking-wider flex items-center gap-1.5 shadow-inner">
+                                <i data-lucide="cross" className="w-4 h-4"></i>
+                                EAC SON
+                            </div>
+                            <div>
+                                <h1 className="font-bold text-sm sm:text-base leading-tight tracking-wide flex items-center gap-2">
+                                    EMILIO AGUINALDO COLLEGE
+                                    <span className="text-xs bg-slate-800 text-slate-300 font-normal px-2 py-0.5 rounded border border-slate-700">
+                                        School of Nursing
+                                    </span>
+                                </h1>
+                                <p className="text-xs text-slate-400 font-medium">
+                                    COMMUNITY HEALTH NURSING 2 (CHN2-RLE) • Community Health Assessment Guide Tally Master
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Top Right Actions */}
+                        <div className="flex items-center space-x-2 text-xs">
+                            <button 
+                                onClick={onAddNew}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-3 py-1.5 rounded flex items-center gap-1.5 transition shadow"
+                            >
+                                <i data-lucide="plus-circle" className="w-4 h-4"></i>
+                                New Household Form
+                            </button>
+                            <button 
+                                onClick={onExport}
+                                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium px-3 py-1.5 rounded flex items-center gap-1.5 transition"
+                            >
+                                <i data-lucide="download" className="w-4 h-4"></i>
+                                Export Sheet (CSV/JSON)
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Navigation Tabs */}
+                    <div className="px-4 flex items-center justify-between bg-slate-950/60 overflow-x-auto text-xs">
+                        <div className="flex space-x-1 py-1">
+                            <button
+                                onClick={() => setActiveTab('grid')}
+                                className={`px-3.5 py-1.5 rounded-md font-medium flex items-center gap-2 transition ${
+                                    activeTab === 'grid' 
+                                        ? 'bg-emerald-600 text-white shadow' 
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                            >
+                                <i data-lucide="table" className="w-3.5 h-3.5"></i>
+                                Master Grid Tally Sheet ({surveysCount})
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('analytics')}
+                                className={`px-3.5 py-1.5 rounded-md font-medium flex items-center gap-2 transition ${
+                                    activeTab === 'analytics' 
+                                        ? 'bg-emerald-600 text-white shadow' 
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                            >
+                                <i data-lucide="pie-chart" className="w-3.5 h-3.5"></i>
+                                Automated Aggregated Summary
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('form')}
+                                className={`px-3.5 py-1.5 rounded-md font-medium flex items-center gap-2 transition ${
+                                    activeTab === 'form' 
+                                        ? 'bg-emerald-600 text-white shadow' 
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                            >
+                                <i data-lucide="file-text" className="w-3.5 h-3.5"></i>
+                                Survey Data Entry Form
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('print')}
+                                className={`px-3.5 py-1.5 rounded-md font-medium flex items-center gap-2 transition ${
+                                    activeTab === 'print' 
+                                        ? 'bg-emerald-600 text-white shadow' 
+                                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                }`}
+                            >
+                                <i data-lucide="printer" className="w-3.5 h-3.5"></i>
+                                Official EAC Assessment Guide View
+                            </button>
+                        </div>
+
+                        <div className="text-slate-400 text-xs hidden md:flex items-center gap-2 px-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            ISO 9001:2015 Certified System
+                        </div>
+                    </div>
+                </header>
+            );
+        }
+
+        function MasterGridSheet({ surveys, onEditRow, onDeleteRow, searchTerm, setSearchTerm }) {
+            return (
+                <div className="flex-1 flex flex-col overflow-hidden bg-slate-100">
+                    {/* Filter & Toolbar */}
+                    <div className="p-3 bg-white border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs shadow-sm no-print">
+                        <div className="flex items-center space-x-2 flex-1 max-w-md">
+                            <i data-lucide="search" className="w-4 h-4 text-slate-400"></i>
+                            <input 
+                                type="text"
+                                placeholder="Search by Informant, Address, Student Nurse, Water Source, Toilet, Income..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full border border-slate-300 rounded px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                            />
+                        </div>
+                        <div className="flex items-center gap-3 text-slate-600 font-medium">
+                            <span className="bg-slate-200 px-2.5 py-1 rounded text-slate-700">
+                                Total Tally Records: <strong>{surveys.length}</strong>
+                            </span>
+                            <span className="text-xs text-slate-500">
+                                Scroll horizontally to view all survey attributes
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Google Sheet Style Table */}
+                    <div className="flex-1 overflow-auto p-2">
+                        <div className="bg-white rounded border border-slate-300 shadow-sm overflow-hidden">
+                            <table className="w-full sheet-grid border-collapse text-left">
+                                <thead>
+                                    <tr className="bg-slate-100 text-slate-700">
+                                        <th className="sticky left-0 bg-slate-200 z-10 w-12 text-center">#</th>
+                                        <th className="sticky left-12 bg-slate-200 z-10">Actions</th>
+                                        <th>Informant (Initials)</th>
+                                        <th>Contact Number</th>
+                                        <th>Address</th>
+                                        <th>Date of Assessment</th>
+                                        <th>Student Nurse</th>
+                                        <th>Total Household Members</th>
+                                        <th>Home Ownership</th>
+                                        <th>Construction Materials</th>
+                                        <th>Sleeping Rooms</th>
+                                        <th>Lighting Facilities</th>
+                                        <th>Living Space Adequacy</th>
+                                        <th>Sleeping Arrangement</th>
+                                        <th>General Sanitary Condition</th>
+                                        <th>Drinking Water Source</th>
+                                        <th>Water Distance (m)</th>
+                                        <th>Water Storage</th>
+                                        <th>Cooking Facility</th>
+                                        <th>Kitchen Sanitary</th>
+                                        <th>Drainage Type</th>
+                                        <th>Toilet Type</th>
+                                        <th>Garbage Disposal</th>
+                                        <th>Family Monthly Income (₱)</th>
+                                        <th>Decision Maker (Money)</th>
+                                        <th>Ethnicity</th>
+                                        <th>Religion</th>
+                                        <th>Language Spoken</th>
+                                        <th>Political Orientation</th>
+                                        <th>Causes of Illness</th>
+                                        <th>Health Services Availment</th>
+                                        <th>First Person Consulted</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {surveys.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="32" className="text-center py-12 text-slate-400">
+                                                No community health survey records found. Click <strong>"New Household Form"</strong> to start tallying entries.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        surveys.map((s, idx) => (
+                                            <tr key={s.id} className="hover:bg-blue-50 transition">
+                                                <td className="sticky left-0 bg-slate-50 font-mono text-center font-bold text-slate-500 z-10 border-r border-slate-300">
+                                                    {idx + 1}
+                                                </td>
+                                                <td className="sticky left-12 bg-slate-50 z-10 border-r border-slate-300">
+                                                    <div className="flex items-center space-x-1">
+                                                        <button 
+                                                            onClick={() => onEditRow(s)}
+                                                            className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-100 rounded title='Edit Entry'"
+                                                        >
+                                                            <i data-lucide="edit-3" className="w-3.5 h-3.5"></i>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => onDeleteRow(s.id)}
+                                                            className="text-red-600 hover:text-red-800 p-1 hover:bg-red-100 rounded title='Delete Entry'"
+                                                        >
+                                                            <i data-lucide="trash-2" className="w-3.5 h-3.5"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td className="font-semibold text-slate-800">{s.meta.informantInitials || 'N/A'}</td>
+                                                <td className="mono">{s.meta.contactNumber || 'N/A'}</td>
+                                                <td className="max-w-xs truncate">{s.meta.address || 'N/A'}</td>
+                                                <td className="mono">{s.meta.dateOfAssessment || 'N/A'}</td>
+                                                <td>{s.meta.studentNurse || 'N/A'}</td>
+                                                <td className="text-center font-semibold">{s.sectionI.householdMembers.length}</td>
+                                                <td>{s.sectionI.homeEnvironment.ownership || '-'}</td>
+                                                <td>{s.sectionI.homeEnvironment.constructionMaterials || '-'}</td>
+                                                <td>{s.sectionI.homeEnvironment.sleepingRooms || '-'}</td>
+                                                <td>{s.sectionI.homeEnvironment.lightingFacilities || '-'}</td>
+                                                <td>{s.sectionI.homeEnvironment.livingSpaceAdequacy || '-'}</td>
+                                                <td>{s.sectionI.homeEnvironment.sleepingArrangement || '-'}</td>
+                                                <td>{s.sectionI.homeEnvironment.sanitaryCondition || '-'}</td>
+                                                <td>{s.sectionI.drinkingWater.source || '-'}</td>
+                                                <td className="mono text-right">{s.sectionI.drinkingWater.distanceMeters || '0'}</td>
+                                                <td>{s.sectionI.drinkingWater.storage || '-'}</td>
+                                                <td>{s.sectionI.kitchen.cookingFacility || '-'}</td>
+                                                <td>{s.sectionI.kitchen.sanitaryConditions || '-'}</td>
+                                                <td>{s.sectionI.drainageFacility.type || '-'}</td>
+                                                <td>{s.sectionI.toiletType.type || '-'}</td>
+                                                <td>{s.sectionI.garbageDisposal.method || '-'}</td>
+                                                <td className="mono font-semibold text-emerald-700">
+                                                    {s.sectionII.familyMonthlyIncome ? `₱${Number(s.sectionII.familyMonthlyIncome).toLocaleString()}` : '-'}
+                                                </td>
+                                                <td>{s.sectionII.moneyDecisionMaker || '-'}</td>
+                                                <td>{s.sectionII.culturalFactors.ethnicity || '-'}</td>
+                                                <td>{s.sectionII.culturalFactors.religion || '-'}</td>
+                                                <td>{s.sectionII.culturalFactors.languageSpoken || '-'}</td>
+                                                <td>{s.sectionII.culturalFactors.politicalOrientation || '-'}</td>
+                                                <td>{s.sectionII.healthBeliefs.causesOfIllness || '-'}</td>
+                                                <td>{s.sectionIV.availHealthServices || '-'}</td>
+                                                <td>{s.sectionIV.firstPersonConsulted || '-'}</td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function AggregatedAnalytics({ surveys }) {
+            const totalCount = surveys.length;
+
+            // Helper to aggregate frequencies for any string or array field
+            const getFrequency = (getter) => {
+                const freq = {};
+                surveys.forEach(s => {
+                    const val = getter(s);
+                    if (Array.isArray(val)) {
+                        val.forEach(item => {
+                            if (item) freq[item] = (freq[item] || 0) + 1;
+                        });
+                    } else if (val) {
+                        freq[val] = (freq[val] || 0) + 1;
+                    }
+                });
+                return freq;
+            };
+
+            const ownershipFreq = getFrequency(s => s.sectionI.homeEnvironment.ownership);
+            const materialsFreq = getFrequency(s => s.sectionI.homeEnvironment.constructionMaterials);
+            const lightingFreq = getFrequency(s => s.sectionI.homeEnvironment.lightingFacilities);
+            const spaceFreq = getFrequency(s => s.sectionI.homeEnvironment.livingSpaceAdequacy);
+            const waterSourceFreq = getFrequency(s => s.sectionI.drinkingWater.source);
+            const toiletFreq = getFrequency(s => s.sectionI.toiletType.type);
+            const garbageFreq = getFrequency(s => s.sectionI.garbageDisposal.method);
+            const consultFreq = getFrequency(s => s.sectionIV.firstPersonConsulted);
+            const transpoFreq = getFrequency(s => s.sectionII.transportationAvailable);
+            const industryFreq = getFrequency(s => s.sectionII.typesOfIndustry);
+            const commNetFreq = getFrequency(s => s.sectionII.communicationNetwork);
+            const healthBeliefsFreq = getFrequency(s => s.sectionII.healthBeliefs.causesOfIllness);
+
+            // Calculated statistics
+            const totalMembersEvaluated = surveys.reduce((acc, s) => acc + (s.sectionI.householdMembers?.length || 0), 0);
+            const totalMonthlyIncome = surveys.reduce((acc, s) => acc + (Number(s.sectionII.familyMonthlyIncome) || 0), 0);
+            const avgIncome = totalCount > 0 ? (totalMonthlyIncome / totalCount).toFixed(2) : 0;
+
+            const renderFrequencyCard = (title, freqObj, icon = "bar-chart-2") => {
+                return (
+                    <div className="bg-white rounded-lg border border-slate-200 p-4 shadow-sm flex flex-col">
+                        <h4 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-2 mb-3 flex items-center justify-between">
+                            <span className="flex items-center gap-2">
+                                <i data-lucide={icon} className="w-4 h-4 text-emerald-600"></i>
+                                {title}
+                            </span>
+                            <span className="text-xs text-slate-400 font-normal">Count (%)</span>
+                        </h4>
+                        <div className="space-y-2 flex-1">
+                            {Object.keys(freqObj).length === 0 ? (
+                                <p className="text-xs text-slate-400 italic">No responses recorded yet.</p>
+                            ) : (
+                                Object.entries(freqObj).map(([key, count]) => {
+                                    const percent = totalCount > 0 ? Math.round((count / totalCount) * 100) : 0;
+                                    return (
+                                        <div key={key} className="text-xs">
+                                            <div className="flex justify-between font-medium text-slate-700 mb-1">
+                                                <span className="truncate max-w-[200px]" title={key}>{key}</span>
+                                                <span className="mono">{count} ({percent}%)</span>
+                                            </div>
+                                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                                <div 
+                                                    className="bg-emerald-600 h-2 rounded-full transition-all duration-500" 
+                                                    style={{ width: `${percent}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-6">
+                    {/* Summary KPI Highlights */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Surveyed Households</div>
+                            <div className="text-2xl font-extrabold text-slate-800 mt-1">{totalCount}</div>
+                            <div className="text-xs text-slate-400 mt-1">Families assessed by students</div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Individual Members</div>
+                            <div className="text-2xl font-extrabold text-emerald-600 mt-1">{totalMembersEvaluated}</div>
+                            <div className="text-xs text-slate-400 mt-1">
+                                Avg {totalCount > 0 ? (totalMembersEvaluated / totalCount).toFixed(1) : 0} members / household
+                            </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Average Monthly Income</div>
+                            <div className="text-2xl font-extrabold text-blue-600 mt-1">₱{Number(avgIncome).toLocaleString()}</div>
+                            <div className="text-xs text-slate-400 mt-1">Self-reported family average</div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
+                            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Primary Consultation</div>
+                            <div className="text-2xl font-extrabold text-indigo-600 mt-1">
+                                {Object.entries(consultFreq).sort((a,b)=>b[1]-a[1])[0]?.[0] || 'N/A'}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">Top first person consulted in illness</div>
+                        </div>
+                    </div>
+
+                    {/* Section Breakdown Grid */}
+                    <div className="space-y-4">
+                        <h3 className="text-base font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-2">
+                            <i data-lucide="layers" className="w-5 h-5 text-emerald-600"></i>
+                            Tally Distribution Charts & Frequency Counts
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {renderFrequencyCard("Home Ownership (I.B.a)", ownershipFreq, "home")}
+                            {renderFrequencyCard("Construction Materials (I.B.b)", materialsFreq, "hammer")}
+                            {renderFrequencyCard("Lighting Facilities (I.B.d)", lightingFreq, "zap")}
+                            {renderFrequencyCard("Living Space Adequacy (I.B.e)", spaceFreq, "maximize")}
+                            {renderFrequencyCard("Drinking Water Source (I.C.a)", waterSourceFreq, "droplet")}
+                            {renderFrequencyCard("Toilet Type (I.F)", toiletFreq, "check-circle-2")}
+                            {renderFrequencyCard("Garbage Disposal Method (I.G)", garbageFreq, "trash")}
+                            {renderFrequencyCard("First Person Consulted (IV)", consultFreq, "user-check")}
+                            {renderFrequencyCard("Causes of Illness Beliefs (II)", healthBeliefsFreq, "activity")}
+                            {renderFrequencyCard("Transportation Available (II.E)", transpoFreq, "truck")}
+                            {renderFrequencyCard("Types of Industry Nearby (II.F)", industryFreq, "building-2")}
+                            {renderFrequencyCard("Communication Network (II.G)", commNetFreq, "phone-call")}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function SurveyForm({ survey, setSurvey, onSave, onCancel }) {
+            // Helper for handling deep updates
+            const updateField = (path, value) => {
+                const keys = path.split('.');
+                setSurvey(prev => {
+                    const next = JSON.parse(JSON.stringify(prev));
+                    let curr = next;
+                    for (let i = 0; i < keys.length - 1; i++) {
+                        if (!curr[keys[i]]) curr[keys[i]] = {};
+                        curr = curr[keys[i]];
+                    }
+                    curr[keys[keys.length - 1]] = value;
+                    return next;
+                });
+            };
+
+            const toggleArrayItem = (path, item) => {
+                const keys = path.split('.');
+                setSurvey(prev => {
+                    const next = JSON.parse(JSON.stringify(prev));
+                    let curr = next;
+                    for (let i = 0; i < keys.length - 1; i++) {
+                        curr = curr[keys[i]];
+                    }
+                    const list = curr[keys[keys.length - 1]] || [];
+                    if (list.includes(item)) {
+                        curr[keys[keys.length - 1]] = list.filter(x => x !== item);
+                    } else {
+                        curr[keys[keys.length - 1]] = [...list, item];
+                    }
+                    return next;
+                });
+            };
+
+            // Table row operations for Members
+            const addMember = () => {
+                setSurvey(prev => ({
+                    ...prev,
+                    sectionI: {
+                        ...prev.sectionI,
+                        householdMembers: [
+                            ...prev.sectionI.householdMembers,
+                            { rank: prev.sectionI.householdMembers.length + 1, initials: '', sex: 'M', birthMonth: '', birthYear: '', maritalStatus: 'Single', weightNotes: '' }
+                        ]
+                    }
+                }));
+            };
+
+            const removeMember = (index) => {
+                setSurvey(prev => ({
+                    ...prev,
+                    sectionI: {
+                        ...prev.sectionI,
+                        householdMembers: prev.sectionI.householdMembers.filter((_, i) => i !== index)
+                    }
+                }));
+            };
+
+            // Table row operations for Animals
+            const addAnimal = () => {
+                setSurvey(prev => ({
+                    ...prev,
+                    sectionI: {
+                        ...prev.sectionI,
+                        domesticAnimals: [...prev.sectionI.domesticAnimals, { kind: '', number: '', areaKept: '' }]
+                    }
+                }));
+            };
+
+            const removeAnimal = (index) => {
+                setSurvey(prev => ({
+                    ...prev,
+                    sectionI: {
+                        ...prev.sectionI,
+                        domesticAnimals: prev.sectionI.domesticAnimals.filter((_, i) => i !== index)
+                    }
+                }));
+            };
+
+            return (
+                <div className="flex-1 overflow-y-auto bg-slate-100 p-4 md:p-8">
+                    <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md border border-slate-200 overflow-hidden">
+                        
+                        {/* Header Box mirroring EAC SON PDF Header */}
+                        <div className="bg-slate-900 text-white p-6 border-b border-slate-800 text-center relative">
+                            <div className="text-xs uppercase font-bold tracking-widest text-emerald-400 mb-1">
+                                EMILIO AGUINALDO COLLEGE
+                            </div>
+                            <p className="text-xs text-slate-300">Gov. D. Mangubat St., Brgy. Burol Main, City of Dasmariñas, Cavite 4114, Philippines</p>
+                            <p className="text-xs text-slate-400">Tel. Nos. (046) 416-4341-42 www.eac.edu.ph</p>
+                            <h2 className="text-lg font-extrabold text-white mt-2 tracking-wide">SCHOOL OF NURSING</h2>
+                            <span className="inline-block bg-red-800 text-white text-[10px] uppercase font-bold px-2 py-0.5 rounded mt-1">
+                                ISO 9001:2015 CERTIFIED • QUALITY MANAGEMENT SYSTEMS
+                            </span>
+                            <h3 className="text-base font-bold text-emerald-300 mt-3 underline decoration-emerald-500 underline-offset-4">
+                                COMMUNITY HEALTH NURSING 2 - COMMUNITY HEALTH ASSESSMENT GUIDE
+                            </h3>
+                        </div>
+
+                        <form onSubmit={(e) => { e.preventDefault(); onSave(); }} className="p-6 space-y-8 text-xs text-slate-800">
+                            
+                            {/* Meta Informant Info */}
+                            <div className="bg-slate-50 p-4 rounded-md border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block font-bold mb-1">Source of information/ informant (Initials only):</label>
+                                    <input 
+                                        type="text" 
+                                        value={survey.meta.informantInitials}
+                                        onChange={(e) => updateField('meta.informantInitials', e.target.value)}
+                                        placeholder="e.g. J.D.C."
+                                        className="w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-emerald-500"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block font-bold mb-1">Contact Number:</label>
+                                    <input 
+                                        type="text" 
+                                        value={survey.meta.contactNumber}
+                                        onChange={(e) => updateField('meta.contactNumber', e.target.value)}
+                                        placeholder="e.g. 09171234567"
+                                        className="w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block font-bold mb-1">Address:</label>
+                                    <input 
+                                        type="text" 
+                                        value={survey.meta.address}
+                                        onChange={(e) => updateField('meta.address', e.target.value)}
+                                        placeholder="House No., Street, Brgy, City"
+                                        className="w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-emerald-500"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block font-bold mb-1">Date of Assessment:</label>
+                                    <input 
+                                        type="date" 
+                                        value={survey.meta.dateOfAssessment}
+                                        onChange={(e) => updateField('meta.dateOfAssessment', e.target.value)}
+                                        className="w-full border border-slate-300 rounded p-2 focus:ring-2 focus:ring-emerald-500"
+                                        required
+                                    />
+                                </div>
+                                <div className="sm:col-span-2">
+                                    <label className="block font-bold mb-1 text-emerald-800">Name & Signature of Student Nurse:</label>
+                                    <input 
+                                        type="text" 
+                                        value={survey.meta.studentNurse}
+                                        onChange={(e) => updateField('meta.studentNurse', e.target.value)}
+                                        placeholder="Student Nurse Name"
+                                        className="w-full border border-emerald-300 rounded p-2 focus:ring-2 focus:ring-emerald-500 bg-emerald-50/30"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* SECTION I */}
+                            <div className="space-y-4">
+                                <h3 className="font-bold text-sm bg-slate-800 text-white px-3 py-1.5 rounded">
+                                    I. Assessment of the Family, Home and Environment Conditions
+                                </h3>
+
+                                {/* Household Members Table */}
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <h4 className="font-bold text-slate-700">A. Members of the household</h4>
+                                        <button type="button" onClick={addMember} className="bg-slate-200 hover:bg-slate-300 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1">
+                                            <i data-lucide="plus" className="w-3.5 h-3.5"></i> Add Member
+                                        </button>
+                                    </div>
+                                    <div className="overflow-x-auto border border-slate-200 rounded">
+                                        <table className="w-full text-left sheet-grid">
+                                            <thead>
+                                                <tr>
+                                                    <th className="w-10">Rank</th>
+                                                    <th>Name (initials)</th>
+                                                    <th className="w-16">Sex</th>
+                                                    <th className="w-20">Birth Month</th>
+                                                    <th className="w-20">Birth Year</th>
+                                                    <th>Marital status</th>
+                                                    <th>WEIGHT (Pregnant women, Elderly, Children 0-5 yrs. old ONLY)</th>
+                                                    <th className="w-10">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {survey.sectionI.householdMembers.map((m, i) => (
+                                                    <tr key={i}>
+                                                        <td className="text-center font-bold">{i + 1}</td>
+                                                        <td>
+                                                            <input 
+                                                                type="text" 
+                                                                value={m.initials} 
+                                                                onChange={(e) => {
+                                                                    const next = [...survey.sectionI.householdMembers];
+                                                                    next[i].initials = e.target.value;
+                                                                    updateField('sectionI.householdMembers', next);
+                                                                }}
+                                                                className="w-full border p-1 rounded" 
+                                                                placeholder="Initials"
+                                                            />
+                                                        </td>
+                                                        <td>
+                                                            <select 
+                                                                value={m.sex} 
+                                                                onChange={(e) => {
+                                                                    const next = [...survey.sectionI.householdMembers];
+                                                                    next[i].sex = e.target.value;
+                                                                    updateField('sectionI.householdMembers', next);
+                                                                }}
+                                                                className="w-full border p-1 rounded"
+                                                            >
+                                                                <option value="M">M</option>
+                                                                <option value="F">F</option>
+                                                            </select>
+                                                        </td>
+                                                        <td>
+                                                            <input 
+                                                                type="text" 
+                                                                value={m.birthMonth} 
+                                                                onChange={(e) => {
+                                                                    const next = [...survey.sectionI.householdMembers];
+                                                                    next[i].birthMonth = e.target.value;
+                                                                    updateField('sectionI.householdMembers', next);
+                                                                }}
+                                                                placeholder="MM" 
+                                                                className="w-full border p-1 rounded" 
+                                                            />
+                                                        </td>
+                                                        <td>
+                                                            <input 
+                                                                type="text" 
+                                                                value={m.birthYear} 
+                                                                onChange={(e) => {
+                                                                    const next = [...survey.sectionI.householdMembers];
+                                                                    next[i].birthYear = e.target.value;
+                                                                    updateField('sectionI.householdMembers', next);
+                                                                }}
+                                                                placeholder="YYYY" 
+                                                                className="w-full border p-1 rounded" 
+                                                            />
+                                                        </td>
+                                                        <td>
+                                                            <input 
+                                                                type="text" 
+                                                                value={m.maritalStatus} 
+                                                                onChange={(e) => {
+                                                                    const next = [...survey.sectionI.householdMembers];
+                                                                    next[i].maritalStatus = e.target.value;
+                                                                    updateField('sectionI.householdMembers', next);
+                                                                }}
+                                                                placeholder="Single/Married/etc" 
+                                                                className="w-full border p-1 rounded" 
+                                                            />
+                                                        </td>
+                                                        <td>
+                                                            <input 
+                                                                type="text" 
+                                                                value={m.weightNotes} 
+                                                                onChange={(e) => {
+                                                                    const next = [...survey.sectionI.householdMembers];
+                                                                    next[i].weightNotes = e.target.value;
+                                                                    updateField('sectionI.householdMembers', next);
+                                                                }}
+                                                                placeholder="Weight / Notes" 
+                                                                className="w-full border p-1 rounded" 
+                                                            />
+                                                        </td>
+                                                        <td className="text-center">
+                                                            {survey.sectionI.householdMembers.length > 1 && (
+                                                                <button type="button" onClick={() => removeMember(i)} className="text-red-500 hover:text-red-700">
+                                                                    <i data-lucide="x" className="w-4 h-4"></i>
+                                                                </button>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* B. Home and Environment */}
+                                <div className="space-y-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <h4 className="font-bold text-slate-700 border-b pb-1">B. Home and Environment</h4>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <span className="font-semibold block mb-1">a. Ownership:</span>
+                                            {['Owned', 'Rented', 'Rent-free'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="ownership" 
+                                                        checked={survey.sectionI.homeEnvironment.ownership === opt}
+                                                        onChange={() => updateField('sectionI.homeEnvironment.ownership', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        <div>
+                                            <span className="font-semibold block mb-1">b. Construction materials used:</span>
+                                            {['Light', 'Concrete', 'Mixed', 'makeshift'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="constructionMaterials" 
+                                                        checked={survey.sectionI.homeEnvironment.constructionMaterials === opt}
+                                                        onChange={() => updateField('sectionI.homeEnvironment.constructionMaterials', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                            <input 
+                                                type="text" 
+                                                placeholder="others (specify)" 
+                                                value={survey.sectionI.homeEnvironment.constructionMaterialsOther}
+                                                onChange={(e) => updateField('sectionI.homeEnvironment.constructionMaterialsOther', e.target.value)}
+                                                className="border p-1 rounded mt-1 text-xs w-full"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <span className="font-semibold block mb-1">c. Number of rooms for sleeping:</span>
+                                            {['own rooms', 'others'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="sleepingRooms" 
+                                                        checked={survey.sectionI.homeEnvironment.sleepingRooms === opt}
+                                                        onChange={() => updateField('sectionI.homeEnvironment.sleepingRooms', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                            <input 
+                                                type="text" 
+                                                placeholder="Specify rooms" 
+                                                value={survey.sectionI.homeEnvironment.sleepingRoomsSpecify}
+                                                onChange={(e) => updateField('sectionI.homeEnvironment.sleepingRoomsSpecify', e.target.value)}
+                                                className="border p-1 rounded mt-1 text-xs w-full"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <span className="font-semibold block mb-1">d. Lighting facilities:</span>
+                                            {['electricity', 'kerosene', 'candle'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="lightingFacilities" 
+                                                        checked={survey.sectionI.homeEnvironment.lightingFacilities === opt}
+                                                        onChange={() => updateField('sectionI.homeEnvironment.lightingFacilities', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        <div>
+                                            <span className="font-semibold block mb-1">e. Adequacy of living space:</span>
+                                            {['small', 'enough', 'spacious'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="livingSpaceAdequacy" 
+                                                        checked={survey.sectionI.homeEnvironment.livingSpaceAdequacy === opt}
+                                                        onChange={() => updateField('sectionI.homeEnvironment.livingSpaceAdequacy', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        <div>
+                                            <span className="font-semibold block mb-1">f. Sleeping arrangement:</span>
+                                            {['in one room', 'in different rooms'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="sleepingArrangement" 
+                                                        checked={survey.sectionI.homeEnvironment.sleepingArrangement === opt}
+                                                        onChange={() => updateField('sectionI.homeEnvironment.sleepingArrangement', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <span className="font-semibold block mb-1">g. General sanitary condition:</span>
+                                            {['dirty', 'clean', 'dusty', 'dirty & polluted'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-4 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="sanitaryCondition" 
+                                                        checked={survey.sectionI.homeEnvironment.sanitaryCondition === opt}
+                                                        onChange={() => updateField('sectionI.homeEnvironment.sanitaryCondition', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* C. Drinking water supply */}
+                                <div className="space-y-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <h4 className="font-bold text-slate-700 border-b pb-1">C. Drinking water supply</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <span className="font-semibold block mb-1">a. Source:</span>
+                                            {['private', 'public'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="waterSource" 
+                                                        checked={survey.sectionI.drinkingWater.source === opt}
+                                                        onChange={() => updateField('sectionI.drinkingWater.source', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold block mb-1">b. Distance from house (approx in meters):</span>
+                                            <input 
+                                                type="text" 
+                                                value={survey.sectionI.drinkingWater.distanceMeters}
+                                                onChange={(e) => updateField('sectionI.drinkingWater.distanceMeters', e.target.value)}
+                                                className="border p-1 rounded w-full"
+                                                placeholder="e.g. 5"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <span className="font-semibold block mb-1">c. Water Storage:</span>
+                                            {[
+                                                'none', 
+                                                'direct from faucet or pipe', 
+                                                'large covered container with faucet', 
+                                                'large uncovered container without faucet'
+                                            ].map(opt => (
+                                                <label key={opt} className="block cursor-pointer my-1">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="waterStorage" 
+                                                        checked={survey.sectionI.drinkingWater.storage === opt}
+                                                        onChange={() => updateField('sectionI.drinkingWater.storage', opt)}
+                                                        className="mr-1.5"
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                            <input 
+                                                type="text" 
+                                                placeholder="others:" 
+                                                value={survey.sectionI.drinkingWater.storageOther}
+                                                onChange={(e) => updateField('sectionI.drinkingWater.storageOther', e.target.value)}
+                                                className="border p-1 rounded mt-1 w-full"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* D. Kitchen */}
+                                <div className="space-y-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <h4 className="font-bold text-slate-700 border-b pb-1">D. Kitchen</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <span className="font-semibold block mb-1">a. Cooking facility:</span>
+                                            {['Electric stove', 'Gas stove', 'Wood/charcoal'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="cookingFacility" 
+                                                        checked={survey.sectionI.kitchen.cookingFacility === opt}
+                                                        onChange={() => updateField('sectionI.kitchen.cookingFacility', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold block mb-1">b. Sanitary conditions:</span>
+                                            {['Clean', 'Dusty', 'Dirty', 'Dirty & polluted'].map(opt => (
+                                                <label key={opt} className="inline-flex items-center gap-1.5 mr-3 cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="kitchenSanitary" 
+                                                        checked={survey.sectionI.kitchen.sanitaryConditions === opt}
+                                                        onChange={() => updateField('sectionI.kitchen.sanitaryConditions', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* E. Drainage, F. Toilet, G. Garbage */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                        <h4 className="font-bold text-slate-700 border-b pb-1 mb-2">E. Drainage facility</h4>
+                                        {['Open drainage', 'blind drainage', 'none'].map(opt => (
+                                            <label key={opt} className="block cursor-pointer my-1">
+                                                <input 
+                                                    type="radio" 
+                                                    name="drainageType" 
+                                                    checked={survey.sectionI.drainageFacility.type === opt}
+                                                    onChange={() => updateField('sectionI.drainageFacility.type', opt)}
+                                                    className="mr-1.5"
+                                                />
+                                                ( ) {opt}
+                                            </label>
+                                        ))}
+                                        <label className="block font-semibold mt-2">distance from house (approx in meters):</label>
+                                        <input 
+                                            type="text" 
+                                            value={survey.sectionI.drainageFacility.distanceMeters}
+                                            onChange={(e) => updateField('sectionI.drainageFacility.distanceMeters', e.target.value)}
+                                            className="border p-1 rounded w-full mt-1"
+                                        />
+                                    </div>
+
+                                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                        <h4 className="font-bold text-slate-700 border-b pb-1 mb-2">F. Toilet type</h4>
+                                        {['pail system', 'Fixed flush type'].map(opt => (
+                                            <label key={opt} className="block cursor-pointer my-1">
+                                                <input 
+                                                    type="radio" 
+                                                    name="toiletType" 
+                                                    checked={survey.sectionI.toiletType.type === opt}
+                                                    onChange={() => updateField('sectionI.toiletType.type', opt)}
+                                                    className="mr-1.5"
+                                                />
+                                                ( ) {opt}
+                                            </label>
+                                        ))}
+                                        <label className="block font-semibold mt-2">others (please specify):</label>
+                                        <input 
+                                            type="text" 
+                                            value={survey.sectionI.toiletType.otherSpecify}
+                                            onChange={(e) => updateField('sectionI.toiletType.otherSpecify', e.target.value)}
+                                            className="border p-1 rounded w-full mt-1"
+                                        />
+                                    </div>
+
+                                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                        <h4 className="font-bold text-slate-700 border-b pb-1 mb-2">G. Method of GARBAGE disposal</h4>
+                                        {[
+                                            'open burning', 
+                                            'open dumping', 
+                                            'burried in pit', 
+                                            'composting', 
+                                            'garbage collection'
+                                        ].map(opt => (
+                                            <label key={opt} className="block cursor-pointer my-1">
+                                                <input 
+                                                    type="radio" 
+                                                    name="garbageMethod" 
+                                                    checked={survey.sectionI.garbageDisposal.method === opt}
+                                                    onChange={() => updateField('sectionI.garbageDisposal.method', opt)}
+                                                    className="mr-1.5"
+                                                />
+                                                ( ) {opt}
+                                            </label>
+                                        ))}
+                                        <input 
+                                            type="text" 
+                                            placeholder="others- specify:" 
+                                            value={survey.sectionI.garbageDisposal.otherSpecify}
+                                            onChange={(e) => updateField('sectionI.garbageDisposal.otherSpecify', e.target.value)}
+                                            className="border p-1 rounded w-full mt-1"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* H, I Hazards */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                        <h4 className="font-bold text-slate-700 mb-1">H. Common household Hazards (Enumerate)</h4>
+                                        <textarea 
+                                            value={survey.sectionI.householdHazards}
+                                            onChange={(e) => updateField('sectionI.householdHazards', e.target.value)}
+                                            rows="2"
+                                            className="w-full border p-2 rounded"
+                                            placeholder="Enumerate hazards..."
+                                        />
+                                    </div>
+                                    <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                        <h4 className="font-bold text-slate-700 mb-1">I. Common Community Hazards (Enumerate)</h4>
+                                        <textarea 
+                                            value={survey.sectionI.communityHazards}
+                                            onChange={(e) => updateField('sectionI.communityHazards', e.target.value)}
+                                            rows="2"
+                                            className="w-full border p-2 rounded"
+                                            placeholder="Enumerate hazards..."
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* J. Domestic animals */}
+                                <div className="space-y-2 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <div className="flex justify-between items-center border-b pb-1">
+                                        <h4 className="font-bold text-slate-700">J. Domestic animals (at home/backyard)</h4>
+                                        <button type="button" onClick={addAnimal} className="bg-slate-200 hover:bg-slate-300 px-2 py-0.5 rounded text-xs font-semibold">
+                                            + Add Animal
+                                        </button>
+                                    </div>
+                                    <table className="w-full text-left sheet-grid">
+                                        <thead>
+                                            <tr>
+                                                <th>Kind</th>
+                                                <th>Number</th>
+                                                <th>Place/area where animals are kept</th>
+                                                <th className="w-10">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {survey.sectionI.domesticAnimals.map((a, i) => (
+                                                <tr key={i}>
+                                                    <td>
+                                                        <input 
+                                                            type="text" 
+                                                            value={a.kind} 
+                                                            onChange={(e) => {
+                                                                const next = [...survey.sectionI.domesticAnimals];
+                                                                next[i].kind = e.target.value;
+                                                                updateField('sectionI.domesticAnimals', next);
+                                                            }}
+                                                            placeholder="Dog, Cat, Chicken" 
+                                                            className="w-full border p-1 rounded" 
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input 
+                                                            type="text" 
+                                                            value={a.number} 
+                                                            onChange={(e) => {
+                                                                const next = [...survey.sectionI.domesticAnimals];
+                                                                next[i].number = e.target.value;
+                                                                updateField('sectionI.domesticAnimals', next);
+                                                            }}
+                                                            placeholder="Qty" 
+                                                            className="w-full border p-1 rounded" 
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <input 
+                                                            type="text" 
+                                                            value={a.areaKept} 
+                                                            onChange={(e) => {
+                                                                const next = [...survey.sectionI.domesticAnimals];
+                                                                next[i].areaKept = e.target.value;
+                                                                updateField('sectionI.domesticAnimals', next);
+                                                            }}
+                                                            placeholder="Backyard, Cage, Inside" 
+                                                            className="w-full border p-1 rounded" 
+                                                        />
+                                                    </td>
+                                                    <td className="text-center">
+                                                        <button type="button" onClick={() => removeAnimal(i)} className="text-red-500">
+                                                            <i data-lucide="x" className="w-4 h-4"></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* SECTION II */}
+                            <div className="space-y-4">
+                                <h3 className="font-bold text-sm bg-slate-800 text-white px-3 py-1.5 rounded">
+                                    II. Socio-Economic & Cultural Variables
+                                </h3>
+
+                                {/* Educational Level */}
+                                <div className="space-y-2 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <h4 className="font-bold text-slate-700 border-b pb-1">EDUCATIONAL LEVEL</h4>
+                                    <table className="w-full text-left sheet-grid">
+                                        <thead>
+                                            <tr>
+                                                <th>MEMBERS OF THE FAMILY</th>
+                                                <th>EDUCATIONAL LEVEL (please indicate)</th>
+                                                <th>TYPE OF JOB/OCCUPATION</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td className="font-semibold">Father</td>
+                                                <td>
+                                                    <input 
+                                                        type="text" 
+                                                        value={survey.sectionII.educationalLevel.father.education} 
+                                                        onChange={(e) => updateField('sectionII.educationalLevel.father.education', e.target.value)}
+                                                        className="w-full border p-1 rounded" 
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input 
+                                                        type="text" 
+                                                        value={survey.sectionII.educationalLevel.father.occupation} 
+                                                        onChange={(e) => updateField('sectionII.educationalLevel.father.occupation', e.target.value)}
+                                                        className="w-full border p-1 rounded" 
+                                                    />
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td className="font-semibold">Mother</td>
+                                                <td>
+                                                    <input 
+                                                        type="text" 
+                                                        value={survey.sectionII.educationalLevel.mother.education} 
+                                                        onChange={(e) => updateField('sectionII.educationalLevel.mother.education', e.target.value)}
+                                                        className="w-full border p-1 rounded" 
+                                                    />
+                                                </td>
+                                                <td>
+                                                    <input 
+                                                        type="text" 
+                                                        value={survey.sectionII.educationalLevel.mother.occupation} 
+                                                        onChange={(e) => updateField('sectionII.educationalLevel.mother.occupation', e.target.value)}
+                                                        className="w-full border p-1 rounded" 
+                                                    />
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Income & Expenses */}
+                                <div className="bg-slate-50 p-3 rounded border border-slate-200 space-y-3">
+                                    <div>
+                                        <label className="font-bold block mb-1">A. Family monthly income (average):</label>
+                                        <input 
+                                            type="number" 
+                                            value={survey.sectionII.familyMonthlyIncome}
+                                            onChange={(e) => updateField('sectionII.familyMonthlyIncome', e.target.value)}
+                                            placeholder="₱ Amount"
+                                            className="border p-2 rounded w-full sm:w-1/2"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="font-bold block mb-1">B. How much spent for:</label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            <div>
+                                                <span className="block font-semibold">Water (monthly):</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.water} 
+                                                    onChange={(e) => updateField('sectionII.expenses.water', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="block font-semibold">Electricity:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.electricity} 
+                                                    onChange={(e) => updateField('sectionII.expenses.electricity', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="block font-semibold">Food & grocery needs:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.foodGrocery} 
+                                                    onChange={(e) => updateField('sectionII.expenses.foodGrocery', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="block font-semibold">Rentals:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.rentals} 
+                                                    onChange={(e) => updateField('sectionII.expenses.rentals', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="block font-semibold">School (fees, materials):</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.school} 
+                                                    onChange={(e) => updateField('sectionII.expenses.school', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="block font-semibold">Clothing:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.clothing} 
+                                                    onChange={(e) => updateField('sectionII.expenses.clothing', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="block font-semibold">Leisure:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.leisure} 
+                                                    onChange={(e) => updateField('sectionII.expenses.leisure', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="block font-semibold">others:</span>
+                                                <input 
+                                                    type="text" 
+                                                    value={survey.sectionII.expenses.others} 
+                                                    onChange={(e) => updateField('sectionII.expenses.others', e.target.value)} 
+                                                    className="border p-1 rounded w-full"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="font-bold block mb-1">C. Who makes decision for money matters: specify</label>
+                                        <input 
+                                            type="text" 
+                                            value={survey.sectionII.moneyDecisionMaker}
+                                            onChange={(e) => updateField('sectionII.moneyDecisionMaker', e.target.value)}
+                                            className="border p-2 rounded w-full"
+                                            placeholder="specify..."
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Communication, Transpo, Industry, Network */}
+                                <div className="space-y-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <div>
+                                        <span className="font-bold block mb-1">D. Communication facilities available:</span>
+                                        {['cellular phone', 'letters', 'e-mail'].map(opt => (
+                                            <label key={opt} className="inline-flex items-center gap-1.5 mr-4 cursor-pointer">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={survey.sectionII.communicationFacilities.includes(opt)}
+                                                    onChange={() => toggleArrayItem('sectionII.communicationFacilities', opt)}
+                                                />
+                                                ( ) {opt}
+                                            </label>
+                                        ))}
+                                        <input 
+                                            type="text" 
+                                            placeholder="others: specify" 
+                                            value={survey.sectionII.communicationFacilitiesOther}
+                                            onChange={(e) => updateField('sectionII.communicationFacilitiesOther', e.target.value)}
+                                            className="border p-1 rounded mt-1 w-full"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <span className="font-bold block mb-1">
+                                            E. Transportation available around the area: <span className="font-normal italic text-slate-500">(may answer more than one (1))</span>
+                                        </span>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                            {[
+                                                'Tricycle', 'Jeepney', 'personal vehicle', 
+                                                'personal motorbike', 'pedicab', 'bicycle', 'walking distance'
+                                            ].map(opt => (
+                                                <label key={opt} className="flex items-center gap-1.5 cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={survey.sectionII.transportationAvailable.includes(opt)}
+                                                        onChange={() => toggleArrayItem('sectionII.transportationAvailable', opt)}
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="font-bold block mb-1">
+                                            F. Types of Industry present around/near the area: <span className="font-normal italic text-slate-500">(may answer more than one (1))</span>
+                                        </span>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {[
+                                                'School', 'Hospital', 'Market and or supermarket', 
+                                                'Maternity clinic/ Lying-in clinic', 'Shopping mall', 
+                                                'Private specialty Clinic', 'Water refilling station', 
+                                                'Employment Industries (products, technology, tourism, farming)', 
+                                                'Gasoline station', 
+                                                'Private / Government business centers (bank, law offices, lending centers,remittances, etc.)'
+                                            ].map(opt => (
+                                                <label key={opt} className="flex items-start gap-1.5 cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="mt-0.5"
+                                                        checked={survey.sectionII.typesOfIndustry.includes(opt)}
+                                                        onChange={() => toggleArrayItem('sectionII.typesOfIndustry', opt)}
+                                                    />
+                                                    <span>___ {opt}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="font-bold block mb-1">
+                                            G. Communication Network <span className="font-normal italic text-slate-500">(necessary for disseminating health information/facilitating referral for clients to the health care delivery system). Check more than one (1)</span>
+                                        </span>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            {[
+                                                'Barangay health center personnel (Nurse, Midwife, BHW)',
+                                                'Barangay hall personnel',
+                                                'Neighbor',
+                                                'Private Clinic (Physician, Dentist, Midwife)',
+                                                'Family/ Friends',
+                                                'Social media',
+                                                'others'
+                                            ].map(opt => (
+                                                <label key={opt} className="flex items-center gap-1.5 cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={survey.sectionII.communicationNetwork.includes(opt)}
+                                                        onChange={() => toggleArrayItem('sectionII.communicationNetwork', opt)}
+                                                    />
+                                                    <span>______ {opt}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* CULTURAL FACTORS & HEALTH BELIEFS */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <div className="space-y-2">
+                                        <h4 className="font-bold text-slate-700 border-b pb-1">CULTURAL FACTORS</h4>
+                                        <div>
+                                            <label className="block font-semibold">Ethnicity:</label>
+                                            <input 
+                                                type="text" 
+                                                value={survey.sectionII.culturalFactors.ethnicity}
+                                                onChange={(e) => updateField('sectionII.culturalFactors.ethnicity', e.target.value)}
+                                                className="border p-1 rounded w-full"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-semibold">Religion:</label>
+                                            <input 
+                                                type="text" 
+                                                value={survey.sectionII.culturalFactors.religion}
+                                                onChange={(e) => updateField('sectionII.culturalFactors.religion', e.target.value)}
+                                                className="border p-1 rounded w-full"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-semibold">Language spoken:</label>
+                                            <input 
+                                                type="text" 
+                                                value={survey.sectionII.culturalFactors.languageSpoken}
+                                                onChange={(e) => updateField('sectionII.culturalFactors.languageSpoken', e.target.value)}
+                                                className="border p-1 rounded w-full"
+                                            />
+                                        </div>
+                                        <div>
+                                            <span className="block font-semibold mb-1">Personal/Family Political orientation/belief:</span>
+                                            {['Totalitarianism', 'Constitutionalism', 'Democracy', 'Autocracy'].map(opt => (
+                                                <label key={opt} className="block cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="politicalOrientation" 
+                                                        checked={survey.sectionII.culturalFactors.politicalOrientation === opt}
+                                                        onChange={() => updateField('sectionII.culturalFactors.politicalOrientation', opt)}
+                                                        className="mr-1.5"
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <h4 className="font-bold text-slate-700 border-b pb-1">HEALTH & ILLNESS BELIEFS</h4>
+                                        <div>
+                                            <span className="block font-semibold mb-1">Causes of Illness:</span>
+                                            {['Natural causes', 'Personal causes', 'Mystical causes'].map(opt => (
+                                                <label key={opt} className="block cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="causesOfIllness" 
+                                                        checked={survey.sectionII.healthBeliefs.causesOfIllness === opt}
+                                                        onChange={() => updateField('sectionII.healthBeliefs.causesOfIllness', opt)}
+                                                        className="mr-1.5"
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <div>
+                                            <span className="block font-semibold mb-1">Health beliefs:</span>
+                                            {[
+                                                'Personal Promotive & Preventive practices', 
+                                                'Family Influences', 
+                                                'Cultural influences'
+                                            ].map(opt => (
+                                                <label key={opt} className="block cursor-pointer">
+                                                    <input 
+                                                        type="radio" 
+                                                        name="healthBeliefsInfluences" 
+                                                        checked={survey.sectionII.healthBeliefs.influences === opt}
+                                                        onChange={() => updateField('sectionII.healthBeliefs.influences', opt)}
+                                                        className="mr-1.5"
+                                                    />
+                                                    ( ) {opt}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* SECTION III */}
+                            <div className="space-y-3">
+                                <h3 className="font-bold text-sm bg-slate-800 text-white px-3 py-1.5 rounded">
+                                    III. HEALTH & ILLNESS PATTERNS of the Community <span className="font-normal text-xs italic text-slate-300">(Obtain data from the Barangay Hall, Health Center or CHO)</span>
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <div>
+                                        <label className="block font-semibold mb-1">• Leading causes of mortality</label>
+                                        <textarea value={survey.sectionIII.leadingMortality} onChange={(e) => updateField('sectionIII.leadingMortality', e.target.value)} rows="2" className="w-full border p-1 rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block font-semibold mb-1">• Leading causes of morbidity</label>
+                                        <textarea value={survey.sectionIII.leadingMorbidity} onChange={(e) => updateField('sectionIII.leadingMorbidity', e.target.value)} rows="2" className="w-full border p-1 rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block font-semibold mb-1">• Leading cause of infant and child mortality</label>
+                                        <textarea value={survey.sectionIII.leadingInfantChildMortality} onChange={(e) => updateField('sectionIII.leadingInfantChildMortality', e.target.value)} rows="2" className="w-full border p-1 rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block font-semibold mb-1">• Leading causes of maternal mortality</label>
+                                        <textarea value={survey.sectionIII.leadingMaternalMortality} onChange={(e) => updateField('sectionIII.leadingMaternalMortality', e.target.value)} rows="2" className="w-full border p-1 rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block font-semibold mb-1">• Leading causes of hospital admission</label>
+                                        <textarea value={survey.sectionIII.leadingHospitalAdmission} onChange={(e) => updateField('sectionIII.leadingHospitalAdmission', e.target.value)} rows="2" className="w-full border p-1 rounded" />
+                                    </div>
+                                    <div>
+                                        <label className="block font-semibold mb-1">• Leading causes of clinic consultation</label>
+                                        <textarea value={survey.sectionIII.leadingClinicConsultation} onChange={(e) => updateField('sectionIII.leadingClinicConsultation', e.target.value)} rows="2" className="w-full border p-1 rounded" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* SECTION IV */}
+                            <div className="space-y-3">
+                                <h3 className="font-bold text-sm bg-slate-800 text-white px-3 py-1.5 rounded">
+                                    IV. HEALTH RESOURCES
+                                </h3>
+                                <div className="space-y-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <p className="font-semibold text-slate-700">Manpower and material Resources: ask about</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="block font-semibold">1. Manpower-population ratio (Barangay Hall & Health center):</label>
+                                            <input type="text" value={survey.sectionIV.manpowerPopulationRatio} onChange={(e) => updateField('sectionIV.manpowerPopulationRatio', e.target.value)} className="w-full border p-1 rounded" />
+                                        </div>
+                                        <div>
+                                            <label className="block font-semibold">2. Quality of health manpower (Knowledge, Skill, Attitude): <span className="font-normal">(adequate or not)</span></label>
+                                            <input type="text" value={survey.sectionIV.qualityHealthManpower} onChange={(e) => updateField('sectionIV.qualityHealthManpower', e.target.value)} className="w-full border p-1 rounded" />
+                                        </div>
+                                        <div>
+                                            <label className="block font-semibold">3. Health budget: <span className="font-normal">(yes or no)</span></label>
+                                            <input type="text" value={survey.sectionIV.healthBudget} onChange={(e) => updateField('sectionIV.healthBudget', e.target.value)} className="w-full border p-1 rounded" />
+                                        </div>
+                                        <div>
+                                            <label className="block font-semibold">4. Sources of health funding: <span className="font-normal">(if yes, is it enough, or satisfying)</span></label>
+                                            <input type="text" value={survey.sectionIV.sourcesHealthFunding} onChange={(e) => updateField('sectionIV.sourcesHealthFunding', e.target.value)} className="w-full border p-1 rounded" />
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t">
+                                        <label className="block font-bold mb-1">Do you avail the health services in your barangay? <span className="font-normal">(if aware or not)</span></label>
+                                        <div className="flex items-center gap-4">
+                                            <label className="cursor-pointer">
+                                                <input type="radio" name="availHealthServices" checked={survey.sectionIV.availHealthServices === 'yes'} onChange={() => updateField('sectionIV.availHealthServices', 'yes')} className="mr-1" /> ☐ yes
+                                            </label>
+                                            <label className="cursor-pointer">
+                                                <input type="radio" name="availHealthServices" checked={survey.sectionIV.availHealthServices === 'no'} onChange={() => updateField('sectionIV.availHealthServices', 'no')} className="mr-1" /> ☐ no
+                                            </label>
+                                            <input type="text" placeholder="If yes; how often?" value={survey.sectionIV.availFrequency} onChange={(e) => updateField('sectionIV.availFrequency', e.target.value)} className="border p-1 rounded flex-1" />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="font-semibold block mb-1">Reason:</span>
+                                        <div className="flex flex-wrap gap-3">
+                                            {['illness', 'prenatal', 'family planning', 'postnatal', 'dental', 'nutrition'].map(r => (
+                                                <label key={r} className="cursor-pointer flex items-center gap-1">
+                                                    <input type="checkbox" checked={survey.sectionIV.availReasons.includes(r)} onChange={() => toggleArrayItem('sectionIV.availReasons', r)} /> ☐ {r}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="font-semibold block mb-1">First person consulted in times of illness:</span>
+                                        <div className="flex flex-wrap gap-3">
+                                            {['Doctor', 'Nurse', 'Midwife', 'BHW', '"hilot"', '"herbularyo"'].map(p => (
+                                                <label key={p} className="cursor-pointer flex items-center gap-1">
+                                                    <input type="radio" name="firstPersonConsulted" checked={survey.sectionIV.firstPersonConsulted === p} onChange={() => updateField('sectionIV.firstPersonConsulted', p)} /> ☐ {p}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* SECTION V */}
+                            <div className="space-y-3">
+                                <h3 className="font-bold text-sm bg-slate-800 text-white px-3 py-1.5 rounded">
+                                    V. POLITICAL/LEADERSHIP PATTERNS
+                                </h3>
+                                <div className="space-y-3 bg-slate-50 p-3 rounded border border-slate-200">
+                                    <div>
+                                        <span className="font-semibold block mb-1">1. Power structure in the community:</span>
+                                        {['formal', 'informal', 'both'].map(opt => (
+                                            <label key={opt} className="inline-flex items-center gap-1.5 mr-4 cursor-pointer">
+                                                <input type="radio" name="powerStructure" checked={survey.sectionV.powerStructure === opt} onChange={() => updateField('sectionV.powerStructure', opt)} /> ( ) {opt}
+                                            </label>
+                                        ))}
+                                    </div>
+
+                                    <div>
+                                        <label className="block font-semibold mb-1">2. Attitudes of the people toward authority: <span className="font-normal">(describe)</span></label>
+                                        <textarea value={survey.sectionV.attitudesTowardAuthority} onChange={(e) => updateField('sectionV.attitudesTowardAuthority', e.target.value)} rows="2" className="w-full border p-2 rounded" />
+                                    </div>
+
+                                    <div>
+                                        <label className="block font-semibold mb-1">3. Conditions/ events/issues that causes conflict or that lead to social bonding or unification:</label>
+                                        <textarea value={survey.sectionV.conflictOrBondingConditions} onChange={(e) => updateField('sectionV.conflictOrBondingConditions', e.target.value)} rows="2" className="w-full border p-2 rounded" />
+                                    </div>
+
+                                    <div>
+                                        <label className="block font-semibold mb-1">4. Effective practices /approaches of people in authority in settling issues and concerns within the community:</label>
+                                        <textarea value={survey.sectionV.effectivePracticesSettlingIssues} onChange={(e) => updateField('sectionV.effectivePracticesSettlingIssues', e.target.value)} rows="2" className="w-full border p-2 rounded" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Signatures & Footer reference */}
+                            <div className="border-t pt-4 space-y-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <div>
+                                        <p className="font-bold">Prepared By:</p>
+                                        <p className="font-bold mt-2">G.Castillo, RN, MAN</p>
+                                        <p className="text-slate-500">Level 3 Coordinator</p>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-emerald-800">Name & Signature of Student Nurse:</p>
+                                        <div className="border-b border-slate-400 mt-6 pb-1 font-semibold text-slate-800">
+                                            {survey.meta.studentNurse || '(Student Nurse Signature)'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="text-[10px] text-slate-400 border-t pt-2">
+                                    <strong>References:</strong>
+                                    <p>Community Health Nursing in the Philippines (A. Maglaya)</p>
+                                    <p>A Praxis in Community Health nursing (R. Belen & DV. Belen)</p>
+                                    <p>Community Health Nursing & Development</p>
+                                </div>
+                            </div>
+
+                            {/* Submit buttons */}
+                            <div className="flex items-center justify-end space-x-3 pt-4 border-t">
+                                <button type="button" onClick={onCancel} className="px-4 py-2 border border-slate-300 rounded font-semibold text-slate-600 hover:bg-slate-100">
+                                    Cancel
+                                </button>
+                                <button type="submit" className="px-6 py-2 bg-emerald-600 text-white rounded font-semibold hover:bg-emerald-500 shadow flex items-center gap-1.5">
+                                    <i data-lucide="check" className="w-4 h-4"></i> Save Survey Entry
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function PrintableOfficialView({ survey, onPrint }) {
+            if (!survey) return <div className="p-8 text-center text-slate-500">Select a survey row to view the official document format.</div>;
+
+            return (
+                <div className="flex-1 overflow-y-auto bg-slate-200 p-4 md:p-8">
+                    <div className="no-print mb-4 flex justify-between items-center max-w-4xl mx-auto">
+                        <span className="text-sm font-semibold text-slate-700">Official Form View (Ready for Printing / Submission)</span>
+                        <button 
+                            onClick={onPrint}
+                            className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded font-semibold text-xs flex items-center gap-2 shadow"
+                        >
+                            <i data-lucide="printer" className="w-4 h-4"></i> Print Assessment Guide
+                        </button>
+                    </div>
+
+                    <div className="max-w-4xl mx-auto bg-white p-8 rounded shadow border border-slate-300 text-xs text-black leading-relaxed font-sans">
+                        {/* Header exact match */}
+                        <div className="text-center border-b pb-4 mb-4">
+                            <h2 className="font-bold text-base tracking-wider">EMILIO AGUINALDO COLLEGE</h2>
+                            <p className="text-[11px]">Gov. D. Mangubat St., Brgy. Burol Main, City of Dasmariñas, Cavite 4114, Philippines</p>
+                            <p className="text-[11px]">Tel. Nos. (046) 416-4341-42 www.eac.edu.ph</p>
+                            <h3 className="font-bold text-sm mt-1">SCHOOL OF NURSING</h3>
+                            <p className="text-[10px] font-semibold text-slate-600">ISO 9001:2015 CERTIFIED QUALITY MANAGEMENT SYSTEMS</p>
+                            <h3 className="font-bold text-sm mt-2 uppercase tracking-wide">COMMUNITY HEALTH NURSING 2</h3>
+                            <h4 className="font-bold text-sm underline">COMMUNITY HEALTH ASSESSMENT GUIDE</h4>
+                        </div>
+
+                        {/* Top Meta */}
+                        <div className="grid grid-cols-2 gap-2 border-b pb-3 mb-4">
+                            <div><strong>Source of information/ informant (Initials only):</strong> {survey.meta.informantInitials}</div>
+                            <div><strong>Contact Number:</strong> {survey.meta.contactNumber}</div>
+                            <div><strong>Address:</strong> {survey.meta.address}</div>
+                            <div><strong>Date of Assessment:</strong> {survey.meta.dateOfAssessment}</div>
+                        </div>
+
+                        {/* Section I */}
+                        <div className="space-y-3 mb-4">
+                            <h4 className="font-bold border-b pb-1">I. Assessment of the Family, Home and Environment Conditions</h4>
+                            
+                            <div>
+                                <strong>A. Members of the household</strong>
+                                <table className="w-full border-collapse border border-black mt-1 text-[11px]">
+                                    <thead>
+                                        <tr className="bg-slate-100">
+                                            <th className="border border-black p-1">Rank</th>
+                                            <th className="border border-black p-1">Name (initials)</th>
+                                            <th className="border border-black p-1">sex</th>
+                                            <th className="border border-black p-1" colSpan="2">Birthdate (Month/Year)</th>
+                                            <th className="border border-black p-1">Marital status</th>
+                                            <th className="border border-black p-1">WEIGHT (Pregnant, Elderly, Children 0-5)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {survey.sectionI.householdMembers.map((m, i) => (
+                                            <tr key={i}>
+                                                <td className="border border-black p-1 text-center">{i+1}</td>
+                                                <td className="border border-black p-1">{m.initials}</td>
+                                                <td className="border border-black p-1 text-center">{m.sex}</td>
+                                                <td className="border border-black p-1 text-center">{m.birthMonth}</td>
+                                                <td className="border border-black p-1 text-center">{m.birthYear}</td>
+                                                <td className="border border-black p-1">{m.maritalStatus}</td>
+                                                <td className="border border-black p-1">{m.weightNotes}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="space-y-1">
+                                <strong>B. Home and Environment</strong>
+                                <div className="pl-3">
+                                    <p>a. Ownership: ({survey.sectionI.homeEnvironment.ownership === 'Owned' ? 'x' : ' '}) Owned ({survey.sectionI.homeEnvironment.ownership === 'Rented' ? 'x' : ' '}) Rented ({survey.sectionI.homeEnvironment.ownership === 'Rent-free' ? 'x' : ' '}) Rent-free</p>
+                                    <p>b. Construction materials used: ({survey.sectionI.homeEnvironment.constructionMaterials === 'Light' ? 'x' : ' '}) Light ({survey.sectionI.homeEnvironment.constructionMaterials === 'Concrete' ? 'x' : ' '}) Concrete ({survey.sectionI.homeEnvironment.constructionMaterials === 'Mixed' ? 'x' : ' '}) Mixed ({survey.sectionI.homeEnvironment.constructionMaterials === 'makeshift' ? 'x' : ' '}) makeshift others: {survey.sectionI.homeEnvironment.constructionMaterialsOther}</p>
+                                    <p>c. Number of rooms for sleeping: ({survey.sectionI.homeEnvironment.sleepingRooms === 'own rooms' ? 'x' : ' '}) own rooms ({survey.sectionI.homeEnvironment.sleepingRooms === 'others' ? 'x' : ' '}) others, Specify: {survey.sectionI.homeEnvironment.sleepingRoomsSpecify}</p>
+                                    <p>d. Lighting facilities: ({survey.sectionI.homeEnvironment.lightingFacilities === 'electricity' ? 'x' : ' '}) electricity ({survey.sectionI.homeEnvironment.lightingFacilities === 'kerosene' ? 'x' : ' '}) kerosene ({survey.sectionI.homeEnvironment.lightingFacilities === 'candle' ? 'x' : ' '}) candle</p>
+                                    <p>e. Adequacy of living space: ({survey.sectionI.homeEnvironment.livingSpaceAdequacy === 'small' ? 'x' : ' '}) small ({survey.sectionI.homeEnvironment.livingSpaceAdequacy === 'enough' ? 'x' : ' '}) enough ({survey.sectionI.homeEnvironment.livingSpaceAdequacy === 'spacious' ? 'x' : ' '}) spacious</p>
+                                    <p>f. Sleeping arrangement: ({survey.sectionI.homeEnvironment.sleepingArrangement === 'in one room' ? 'x' : ' '}) in one room ({survey.sectionI.homeEnvironment.sleepingArrangement === 'in different rooms' ? 'x' : ' '}) in different rooms</p>
+                                    <p>g. General sanitary condition: ({survey.sectionI.homeEnvironment.sanitaryCondition === 'dirty' ? 'x' : ' '}) dirty ({survey.sectionI.homeEnvironment.sanitaryCondition === 'clean' ? 'x' : ' '}) clean ({survey.sectionI.homeEnvironment.sanitaryCondition === 'dusty' ? 'x' : ' '}) dusty ({survey.sectionI.homeEnvironment.sanitaryCondition === 'dirty & polluted' ? 'x' : ' '}) dirty & polluted</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <strong>C. Drinking water supply</strong>
+                                <div className="pl-3">
+                                    <p>a. Source: ({survey.sectionI.drinkingWater.source === 'private' ? 'x' : ' '}) private ({survey.sectionI.drinkingWater.source === 'public' ? 'x' : ' '}) public</p>
+                                    <p>b. Distance from house: {survey.sectionI.drinkingWater.distanceMeters} meters</p>
+                                    <p>c. Water Storage: ({survey.sectionI.drinkingWater.storage === 'none' ? 'x' : ' '}) none ({survey.sectionI.drinkingWater.storage === 'direct from faucet or pipe' ? 'x' : ' '}) direct from faucet or pipe ({survey.sectionI.drinkingWater.storage === 'large covered container with faucet' ? 'x' : ' '}) large covered container with faucet ({survey.sectionI.drinkingWater.storage === 'large uncovered container without faucet' ? 'x' : ' '}) large uncovered container without faucet others: {survey.sectionI.drinkingWater.storageOther}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <strong>D. Kitchen</strong>
+                                <div className="pl-3">
+                                    <p>a. Cooking facility: ({survey.sectionI.kitchen.cookingFacility === 'Electric stove' ? 'x' : ' '}) Electric stove ({survey.sectionI.kitchen.cookingFacility === 'Gas stove' ? 'x' : ' '}) Gas stove ({survey.sectionI.kitchen.cookingFacility === 'Wood/charcoal' ? 'x' : ' '}) Wood/charcoal</p>
+                                    <p>b. Sanitary conditions: ({survey.sectionI.kitchen.sanitaryConditions === 'Clean' ? 'x' : ' '}) Clean ({survey.sectionI.kitchen.sanitaryConditions === 'Dusty' ? 'x' : ' '}) Dusty ({survey.sectionI.kitchen.sanitaryConditions === 'Dirty' ? 'x' : ' '}) Dirty ({survey.sectionI.kitchen.sanitaryConditions === 'Dirty & polluted' ? 'x' : ' '}) Dirty & polluted</p>
+                                </div>
+                            </div>
+
+                            <p><strong>E. Drainage facility:</strong> ({survey.sectionI.drainageFacility.type === 'Open drainage' ? 'x' : ' '}) Open drainage ({survey.sectionI.drainageFacility.type === 'blind drainage' ? 'x' : ' '}) blind drainage ({survey.sectionI.drainageFacility.type === 'none' ? 'x' : ' '}) none distance: {survey.sectionI.drainageFacility.distanceMeters} m</p>
+                            <p><strong>F. Toilet type:</strong> ({survey.sectionI.toiletType.type === 'pail system' ? 'x' : ' '}) pail system ({survey.sectionI.toiletType.type === 'Fixed flush type' ? 'x' : ' '}) Fixed flush type others: {survey.sectionI.toiletType.otherSpecify}</p>
+                            <p><strong>G. Method of GARBAGE disposal:</strong> ({survey.sectionI.garbageDisposal.method === 'open burning' ? 'x' : ' '}) open burning ({survey.sectionI.garbageDisposal.method === 'open dumping' ? 'x' : ' '}) open dumping ({survey.sectionI.garbageDisposal.method === 'burried in pit' ? 'x' : ' '}) burried in pit ({survey.sectionI.garbageDisposal.method === 'composting' ? 'x' : ' '}) composting ({survey.sectionI.garbageDisposal.method === 'garbage collection' ? 'x' : ' '}) garbage collection others: {survey.sectionI.garbageDisposal.otherSpecify}</p>
+                            
+                            <p><strong>H. Common household Hazards:</strong> {survey.sectionI.householdHazards}</p>
+                            <p><strong>I. Common Community Hazards:</strong> {survey.sectionI.communityHazards}</p>
+
+                            <div>
+                                <strong>J. Domestic animals (at home/backyard)</strong>
+                                <table className="w-full border-collapse border border-black mt-1 text-[11px]">
+                                    <thead>
+                                        <tr className="bg-slate-100">
+                                            <th className="border border-black p-1">Kind</th>
+                                            <th className="border border-black p-1">Number</th>
+                                            <th className="border border-black p-1">Place/area where animals are kept</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {survey.sectionI.domesticAnimals.map((a, i) => (
+                                            <tr key={i}>
+                                                <td className="border border-black p-1">{a.kind}</td>
+                                                <td className="border border-black p-1 text-center">{a.number}</td>
+                                                <td className="border border-black p-1">{a.areaKept}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* Footer Details */}
+                        <div className="border-t pt-4 flex justify-between items-end">
+                            <div>
+                                <p><strong>Prepared By:</strong></p>
+                                <p className="font-bold">G.Castillo, RN, MAN</p>
+                                <p className="text-[10px]">Level 3 Coordinator</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="font-bold border-b border-black pb-1 min-w-[200px]">
+                                    {survey.meta.studentNurse || 'Student Nurse'}
+                                </p>
+                                <p className="text-[10px]">Name & Signature of Student Nurse</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [surveys, setSurveys] = useState(() => {
+                const saved = localStorage.getItem('eac_chn2_surveys');
+                return saved ? JSON.parse(saved) : initialMockSurveys;
+            });
+
+            const [activeTab, setActiveTab] = useState('grid'); // 'grid', 'analytics', 'form', 'print'
+            const [currentSurvey, setCurrentSurvey] = useState(createEmptySurvey());
+            const [searchTerm, setSearchTerm] = useState('');
+
+            // Auto-persist to localStorage
+            useEffect(() => {
+                localStorage.setItem('eac_chn2_surveys', JSON.stringify(surveys));
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }, [surveys, activeTab]);
+
+            // Filtered surveys
+            const filteredSurveys = useMemo(() => {
+                if (!searchTerm.trim()) return surveys;
+                const term = searchTerm.toLowerCase();
+                return surveys.filter(s => 
+                    s.meta.informantInitials?.toLowerCase().includes(term) ||
+                    s.meta.address?.toLowerCase().includes(term) ||
+                    s.meta.studentNurse?.toLowerCase().includes(term) ||
+                    s.sectionI.drinkingWater.source?.toLowerCase().includes(term) ||
+                    s.sectionI.toiletType.type?.toLowerCase().includes(term)
+                );
+            }, [surveys, searchTerm]);
+
+            // Handlers
+            const handleAddNew = () => {
+                setCurrentSurvey(createEmptySurvey());
+                setActiveTab('form');
+            };
+
+            const handleEditRow = (survey) => {
+                setCurrentSurvey(JSON.parse(JSON.stringify(survey)));
+                setActiveTab('form');
+            };
+
+            const handleDeleteRow = (id) => {
+                if (window.confirm('Are you sure you want to delete this household survey record from the tally sheet?')) {
+                    setSurveys(prev => prev.filter(s => s.id !== id));
+                }
+            };
+
+            const handleSaveForm = () => {
+                setSurveys(prev => {
+                    const exists = prev.some(s => s.id === currentSurvey.id);
+                    if (exists) {
+                        return prev.map(s => s.id === currentSurvey.id ? currentSurvey : s);
+                    } else {
+                        return [currentSurvey, ...prev];
+                    }
+                });
+                setActiveTab('grid');
+            };
+
+            const handleExportCSV = () => {
+                const headers = ["Informant", "Contact", "Address", "Date", "Student Nurse", "Members Count", "Ownership", "Water Source", "Toilet Type", "Monthly Income"];
+                const rows = surveys.map(s => [
+                    `"${s.meta.informantInitials || ''}"`,
+                    `"${s.meta.contactNumber || ''}"`,
+                    `"${s.meta.address || ''}"`,
+                    `"${s.meta.dateOfAssessment || ''}"`,
+                    `"${s.meta.studentNurse || ''}"`,
+                    s.sectionI.householdMembers.length,
+                    `"${s.sectionI.homeEnvironment.ownership || ''}"`,
+                    `"${s.sectionI.drinkingWater.source || ''}"`,
+                    `"${s.sectionI.toiletType.type || ''}"`,
+                    s.sectionII.familyMonthlyIncome || 0
+                ]);
+                const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `EAC_CHN2_Community_Health_Tally_${new Date().toISOString().split('T')[0]}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            return (
+                <div className="flex-1 flex flex-col h-full overflow-hidden">
+                    <HeaderBar 
+                        activeTab={activeTab} 
+                        setActiveTab={setActiveTab} 
+                        surveysCount={surveys.length}
+                        onAddNew={handleAddNew}
+                        onExport={handleExportCSV}
+                    />
+
+                    {activeTab === 'grid' && (
+                        <MasterGridSheet 
+                            surveys={filteredSurveys} 
+                            onEditRow={handleEditRow}
+                            onDeleteRow={handleDeleteRow}
+                            searchTerm={searchTerm}
+                            setSearchTerm={setSearchTerm}
+                        />
+                    )}
+
+                    {activeTab === 'analytics' && (
+                        <AggregatedAnalytics surveys={surveys} />
+                    )}
+
+                    {activeTab === 'form' && (
+                        <SurveyForm 
+                            survey={currentSurvey} 
+                            setSurvey={setCurrentSurvey} 
+                            onSave={handleSaveForm}
+                            onCancel={() => setActiveTab('grid')}
+                        />
+                    )}
+
+                    {activeTab === 'print' && (
+                        <PrintableOfficialView 
+                            survey={currentSurvey.id ? currentSurvey : surveys[0]} 
+                            onPrint={() => window.print()}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Render application
+        const rootElement = document.getElementById('root');
+        const root = ReactDOM.createRoot(rootElement);
+        root.render(<App />);
+    </script>
+</body>
+</html>
